@@ -1,12 +1,7 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING, Literal
-import re, io, asyncio, traceback, time, queue as q, sys, multiprocessing
+from typing import Literal
+import os, sys, ast, linecache, traceback, time, queue as q, multiprocessing
 
-import discord
-import discord.app_commands as app_commands
-
-import rhombus
-from rhombus.core import BeetFile
 
 class CompilationSandboxError(Exception):
     """Wird geworfen, wenn der Sandbox-Worker einen Fehler meldet."""
@@ -15,13 +10,11 @@ class CompilationSandboxError(Exception):
 
 #======// Core Sandbox & Compilation //============================================================//
 
-def _compile_worker(code_blocks: list[str], compilation_target_name: str | None, result_queue: multiprocessing.Queue):
+def _compile_worker(code_blocks: list[str], compilation_target_name: str | None, result_queue: multiprocessing.Queue) -> None:
     """
     WICHTIG: Dieser Worker MUSS auf Windows eine Top-Level Funktion sein (darf nicht in 
     compile_density verschachtelt sein), da multiprocessing.Process sonst einen Pickle-Error wirft!
     """
-    import os
-    import sys
     sys.dont_write_bytecode = True  # Verhindert .pyc Schreibversuche, die den Audit Hook triggern
     
     # SECURITY: Entferne ALLE sensiblen Umgebungsvariablen aus dem Worker-Prozess!
@@ -62,8 +55,6 @@ def _compile_worker(code_blocks: list[str], compilation_target_name: str | None,
         print("[Worker] Imported rhombus.", flush=True)
         
         print("[Worker] Executing code...", flush=True)
-        import ast
-        import linecache
         
         for i, block in enumerate(code_blocks):
             block_name = f"<Code Block {i+1}>"
@@ -110,7 +101,6 @@ def _compile_worker(code_blocks: list[str], compilation_target_name: str | None,
         print("[Worker] Done.", flush=True)
         
     except Exception as e:
-        import traceback
         tb_exc = traceback.TracebackException.from_exception(e)
         
         # Filtere Traceback: Behalte nur Code-Blöcke (alles andere ist interner Rhombus-Code)

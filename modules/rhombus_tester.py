@@ -45,7 +45,7 @@ async def process_compile_request(message: str, reply_func):
 
 def setup(client: RhombusClient):
 
-    async def handle_compile_requests(message: discord.Message):
+    async def handle_potential_compilation_request_message(message: discord.Message):
         if message.author.bot:
             return
         
@@ -116,8 +116,8 @@ def setup(client: RhombusClient):
 
     @client.event
     async def on_message(message: discord.Message):
-        await handle_compile_requests(message)
+        await handle_potential_compilation_request_message(message)
 
     @client.event
     async def on_message_edit(before: discord.Message, after: discord.Message):
-        await handle_compile_requests(after)
+        await handle_potential_compilation_request_message(after)

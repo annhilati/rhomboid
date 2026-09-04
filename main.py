@@ -10,7 +10,10 @@ intents.message_content = True
 
 class RhombusClient(discord.Client):
     def __init__(self):
-        super().__init__(intents=intents)
+        super().__init__(
+            intents=intents, 
+            allowed_mentions=discord.AllowedMentions(replied_user=False)
+        )
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
