@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 async def send_error_message(ctx: discord.Interaction | discord.Message | discord.Webhook, error: Exception):
-    """Hilfsmethode, um Fehler schön als Discord Nachricht zurückzusenden."""
+    """Helper method to format and send errors back as a Discord message."""
 
     msg = ""
 
@@ -32,7 +32,7 @@ async def send_error_message(ctx: discord.Interaction | discord.Message | discor
                 await ctx.response.send_message(embed=embed, ephermal=True)
 
     except Exception as e:
-        print(f"Konnte Fehlermeldung nicht an Discord senden: {e}", file=sys.stderr)
+        print(f"Could not send error message to Discord: {e}", file=sys.stderr)
 
 def setup(client: RhombusClient):
     @client.tree.error
@@ -55,5 +55,5 @@ def setup(client: RhombusClient):
         if target:
             await send_error_message(target, error)
         else:
-            print(f"Unbehandelter Fehler im Event {event_method}:", file=sys.stderr)
+            print(f"Unhandled error in event {event_method}:", file=sys.stderr)
             traceback.print_exc()

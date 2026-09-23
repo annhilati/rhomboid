@@ -4,10 +4,10 @@ import time
 import subprocess
 
 def get_latest_mtime():
-    """Findet den neuesten Zeitstempel aller Python-Dateien im Verzeichnis (außer dev.py)."""
+    """Finds the newest timestamp of all Python files in the directory (except dev.py)."""
     mtime = 0
     for root, _, files in os.walk('.'):
-        # Ignoriere Caches und Git
+        # Ignore caches and git
         if '.git' in root or '__pycache__' in root or '.venv' in root:
             continue
         for file in files:
@@ -17,10 +17,10 @@ def get_latest_mtime():
     return mtime
 
 if __name__ == '__main__':
-    print("Starte Development Server mit Hot-Reloading...")
+    print("Starting Development Server with hot-reloading...")
     last_mtime = get_latest_mtime()
     
-    # Starte den echten Bot
+    # Start the actual bot
     process = subprocess.Popen([sys.executable, "main.py"])
 
     try:
@@ -29,16 +29,16 @@ if __name__ == '__main__':
             current_mtime = get_latest_mtime()
             
             if current_mtime > last_mtime:
-                print("\n[Dev] Datei-Änderung erkannt! Starte Bot neu...")
+                print("\n[Dev] File change detected! Restarting bot...")
                 last_mtime = current_mtime
                 
-                # Alten Prozess sauber beenden
+                # Terminate the old process cleanly
                 process.terminate()
                 process.wait()
                 
-                # Neuen Prozess starten
+                # Start the new process
                 process = subprocess.Popen([sys.executable, "main.py"])
                 
     except KeyboardInterrupt:
-        print("\n[Dev] Beende Development Server...")
+        print("\n[Dev] Terminating Development Server...")
         process.terminate()

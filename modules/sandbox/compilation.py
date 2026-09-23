@@ -5,6 +5,7 @@ import traceback
 def execute_rhombus_code(code_blocks: list[str], target_name: str | None) -> list[tuple[str, str]]:
     import rhombus
     namespace = {
+        '__name__': '__main__',
         'rhombus': rhombus,
         **{name: getattr(rhombus, name) for name in dir(rhombus) if not name.startswith('_')}
     }
@@ -16,7 +17,7 @@ def execute_rhombus_code(code_blocks: list[str], target_name: str | None) -> lis
         if i == len(code_blocks) - 1 and target_name is None:
             tree = ast.parse(block)
             if not tree.body:
-                raise ValueError(f'Der Code-Block {i+1} ist leer.')
+                raise ValueError(f'The code block {i+1} is empty.')
             
             last_node = tree.body[-1]
             if isinstance(last_node, ast.Expr):
@@ -26,7 +27,7 @@ def execute_rhombus_code(code_blocks: list[str], target_name: str | None) -> lis
                 target_name = '<unbound expression>'
                 target_var = rhombus.Density(target_value)
             else:
-                raise ValueError('Es wurde kein target angegeben und der Code endet nicht mit einer Expression.')
+                raise ValueError('No compilation target found. Neither did the message contain a \'compile `xyz`\' phrase nor did the code blocks end with an unassigned expression.')
         else:
             exec(compile(block, filename=block_name, mode='exec'), namespace)
 

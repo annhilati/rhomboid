@@ -45,11 +45,11 @@ allow the Bot correcting itself when the user corrects his message, even after r
 #======// Discord Interface //===================================================================//
 
 async def process_compile_request(code_text: str, compilation_target_name: str | None, reply_func):
-    """Parsen der Discord Nachricht und Aufruf der Sandbox."""
+    """Parse the Discord message and invoke the sandbox."""
     if not (code_blocks := re.findall(r'```(?:python|py)\n(.*?)\n```', code_text, re.IGNORECASE | re.DOTALL)):
-        raise ValueError("Es wurden keine Python Code-Blöcke (```py oder ```python) gefunden.")
+        raise ValueError("No Python code blocks (```py or ```python) found.")
 
-    # Übergebe die Blöcke einzeln an den Compiler für besseres Error-Logging
+    # Pass the blocks individually to the compiler for better error logging
     compiled_files = compile_density(code_blocks, compilation_target_name)
         
     files_to_send: list[discord.File] = []
@@ -57,7 +57,7 @@ async def process_compile_request(code_text: str, compilation_target_name: str |
         files_to_send.append(discord.File(fp=io.BytesIO(content_str.encode('utf-8')), filename=filename))
         
     if not files_to_send:
-        raise ValueError("Die `compile()` Methode hat keine Dateien zurückgegeben.")
+        raise ValueError("The `compile()` method did not return any files.")
 
     await reply_func("", files=files_to_send)
 
@@ -70,7 +70,7 @@ def setup(client: RhombusClient):
         
         is_cached = str(message.id) in MESSAGE_CACHE
         
-        # Reagiere, wenn der Bot gepingt wurde ODER die Nachricht bereits kompiliert wurde
+        # React if the bot was pinged OR the message was already compiled
         if client.user in message.mentions or is_cached:
 
             target_msg = message
@@ -81,7 +81,7 @@ def setup(client: RhombusClient):
                 cached_target_name = MESSAGE_CACHE[str(message.id)].get("target_name")
             
             if "```py" not in command_text.lower():
-                # Prüfe, ob es eine Antwort auf eine andere Nachricht ist
+                # Check if it is a reply to another message
                 if message.reference and message.reference.message_id:
                     try:
                         ref_msg = message.reference.resolved
@@ -129,7 +129,7 @@ def setup(client: RhombusClient):
                 error_trace = str(e)
                 if len(error_trace) > 1700:
                     error_trace = "..." + error_trace[-1697:]
-                msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# You can edit [the message]({target_msg.jump_url}) to fix the error and re-run the compilation."
+                msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# Edit [the message]({target_msg.jump_url}) to fix the error and re-run the compilation."
                 await response(msg)
                 
             except Exception as e:
@@ -138,15 +138,15 @@ def setup(client: RhombusClient):
     @client.tree.context_menu(name="Compile Density")
     async def compile_context_menu(interaction: discord.Interaction, message: discord.Message):
         if not message.content or "```" not in message.content:
-            await interaction.response.send_message("Diese Nachricht enthält keinen Code-Block.", ephemeral=True)
+            await interaction.response.send_message("This message does not contain a code block.", ephemeral=True)
             return
             
-        # Wir deferren ephemeral, damit der Nutzer sieht, dass etwas passiert, 
-        # die echte Antwort aber als normale Nachricht kommt (die bearbeitbar bleibt)
+        # We defer ephemerally so the user sees something is happening,
+        # but the real response will be sent as a normal message (which remains editable)
         await interaction.response.defer(ephemeral=True, thinking=True)
         
         async def response(text: str, files: list[discord.File]=None):
-            # Wir nutzen exakt dieselbe Logik wie beim Ping, um eine normale Nachricht zu senden!
+            # We use the exact same logic as for the ping, to send a normal message!
             reply_info = MESSAGE_CACHE.get(str(message.id))
             if reply_info:
                 try:
@@ -167,9 +167,9 @@ def setup(client: RhombusClient):
             }
             save_cache()
             
-            # Schließe die ursprüngliche Interaktion ab
+            # Conclude the original interaction
             try:
-                await interaction.edit_original_response(content="✅ Kompilierung ausgeführt!")
+                await interaction.edit_original_response(content="✅ Compilation executed!")
             except discord.NotFound:
                 pass
             
@@ -179,7 +179,7 @@ def setup(client: RhombusClient):
             error_trace = str(e)
             if len(error_trace) > 1700:
                 error_trace = "..." + error_trace[-1697:]
-            msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# You can edit [the message]({message.jump_url}) to fix the error and re-run the compilation."
+            msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# Edit [the message]({message.jump_url}) to fix the error and re-run the compilation."
             await response(msg)
             
         except Exception as e:

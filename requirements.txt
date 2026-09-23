@@ -1,3 +1,3 @@
 discord.py
 python-dotenv
-rhombus==0.1.0-pre2
+rhombus==0.1.0-pre3
