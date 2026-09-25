@@ -34,7 +34,7 @@ async def on_ready():
     print('------')
     try:
         rhombus_version = importlib.metadata.version("rhombus")
-        activity = discord.Activity(type=discord.ActivityType.playing, name=f"Rhombus v{rhombus_version}")
+        activity = discord.Activity(type=discord.ActivityType.playing, name=f"Running Rhombus v{rhombus_version}")
         await client.change_presence(activity=activity)
         print(f"Status set to: Rhombus v{rhombus_version}")
     except Exception as e:

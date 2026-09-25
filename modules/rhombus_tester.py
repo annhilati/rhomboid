@@ -1,20 +1,15 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING, Literal
-import re, io
+from typing import TYPE_CHECKING
+import re, io, os, json
 
 import discord
 import discord.app_commands as app_commands
-
-import rhombus
-from rhombus.core import BeetFile
 
 from .sandbox.runner import compile_density, CompilationSandboxError
 
 if TYPE_CHECKING:
     from main import RhombusClient
 
-
-import os, json
 
 CACHE_FILE = "message_cache.json"
 
@@ -39,7 +34,6 @@ def save_cache():
 
 """Here we cache the bot's replies to messages of users (stored in a JSON file), so we can
 allow the Bot correcting itself when the user corrects his message, even after restarts."""
-
 
 
 #======// Discord Interface //===================================================================//
@@ -129,7 +123,7 @@ def setup(client: RhombusClient):
                 error_trace = str(e)
                 if len(error_trace) > 1700:
                     error_trace = "..." + error_trace[-1697:]
-                msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# Edit [the message]({target_msg.jump_url}) to fix the error and re-run the compilation."
+                msg = f"## Compilation failed\n```python\n{error_trace}\n```\n-# Edit [the message]({target_msg.jump_url}) to fix the error and re-run the compilation."
                 await response(msg)
                 
             except Exception as e:
@@ -141,45 +135,34 @@ def setup(client: RhombusClient):
             await interaction.response.send_message("This message does not contain a code block.", ephemeral=True)
             return
             
-        # We defer ephemerally so the user sees something is happening,
-        # but the real response will be sent as a normal message (which remains editable)
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        # We always answer publicly. Since we use edit_original_response,
+        # this is also allowed for User Apps! (403 Forbidden only occurred with message.reply).
+        await interaction.response.defer(ephemeral=False, thinking=True)
         
         async def response(text: str, files: list[discord.File]=None):
-            # We use the exact same logic as for the ping, to send a normal message!
-            reply_info = MESSAGE_CACHE.get(str(message.id))
-            if reply_info:
-                try:
-                    existing_reply = await message.channel.fetch_message(reply_info["reply_id"])
-                    await existing_reply.edit(content=text, attachments=files if files else [])
-                    return
-                except discord.NotFound:
-                    pass
-            
             if files:
-                reply = await message.reply(content=text, files=files, mention_author=False, silent=True)
+                await interaction.edit_original_response(content=text, attachments=files)
             else:
-                reply = await message.reply(content=text, mention_author=False, silent=True)
-
-            MESSAGE_CACHE[str(message.id)] = {
-                "reply_id": reply.id,
-                "target_name": None
-            }
-            save_cache()
-            
-            # Conclude the original interaction
+                await interaction.edit_original_response(content=text)
+                
             try:
-                await interaction.edit_original_response(content="✅ Compilation executed!")
-            except discord.NotFound:
+                # Fetch the sent message to store it in the cache
+                reply = await interaction.original_response()
+                MESSAGE_CACHE[str(message.id)] = {
+                    "reply_id": reply.id,
+                    "target_name": None
+                }
+                save_cache()
+            except Exception:
                 pass
             
         try:
             await process_compile_request(message.content, None, response)
-        except CompilationSandboxError as e:
+        except (CompilationSandboxError, ValueError) as e:
             error_trace = str(e)
             if len(error_trace) > 1700:
                 error_trace = "..." + error_trace[-1697:]
-            msg = f"## Compilation failed: (`{e.__class__.__name__}`)\n```python\n{error_trace}\n```\n-# Edit [the message]({message.jump_url}) to fix the error and re-run the compilation."
+            msg = f"## Compilation failed\n```python\n{error_trace}\n```\n-# Edit [the message]({message.jump_url}) to fix the error and re-run the compilation."
             await response(msg)
             
         except Exception as e:
@@ -192,3 +175,25 @@ def setup(client: RhombusClient):
     @client.event
     async def on_message_edit(before: discord.Message, after: discord.Message):
         await handle_potential_compilation_request_message(after)
+        
+    @client.event
+    async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
+        # Wenn die Nachricht nicht im internen Cache war, wird on_message_edit nicht aufgerufen.
+        # on_raw_message_edit fängt diese Fälle (z.B. nach einem Neustart) ab!
+        if payload.cached_message is not None:
+            return  # Wird bereits von on_message_edit behandelt
+            
+        # Wir reagieren nur, wenn die Nachricht in unserem eigenen Cache ist (also bearbeitet werden soll)
+        # oder wenn es potenziell ein Code-Block ist. 
+        if str(payload.message_id) in MESSAGE_CACHE or (payload.data and 'content' in payload.data and '```' in payload.data['content']):
+            try:
+                channel = client.get_channel(payload.channel_id) or await client.fetch_channel(payload.channel_id)
+                if channel:
+                    message = await channel.fetch_message(payload.message_id)
+                    await handle_potential_compilation_request_message(message)
+            except discord.NotFound:
+                pass
+            except Exception as e:
+                import sys, traceback
+                print(f"Fehler beim Fetchen der Raw-Message {payload.message_id}:", file=sys.stderr)
+                traceback.print_exc()

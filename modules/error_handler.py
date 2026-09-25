@@ -12,8 +12,6 @@ if TYPE_CHECKING:
 async def send_error_message(ctx: discord.Interaction | discord.Message | discord.Webhook, error: Exception):
     """Helper method to format and send errors back as a Discord message."""
 
-    msg = ""
-
     embed = discord.Embed(
         title="Unhandled Error",
         description=f"# {error.__class__.__name__}\n{error.args[0]}",
@@ -24,12 +22,15 @@ async def send_error_message(ctx: discord.Interaction | discord.Message | discor
         if isinstance(ctx, discord.Message):
             await ctx.reply(embed=embed, mention_author=False, silent=True)
         elif isinstance(ctx, discord.Webhook):
-            await ctx.send(embed=embed, ephermal=True)
+            await ctx.send(embed=embed, ephemeral=True)
         elif isinstance(ctx, discord.Interaction):
             if ctx.response.is_done():
-                await ctx.followup.send(embed=embed, ephermal=True)
+                try:
+                    await ctx.followup.send(embed=embed, ephemeral=True)
+                except discord.HTTPException:
+                    await ctx.followup.send(embed=embed, ephemeral=False)
             else:
-                await ctx.response.send_message(embed=embed, ephermal=True)
+                await ctx.response.send_message(embed=embed, ephemeral=True)
 
     except Exception as e:
         print(f"Could not send error message to Discord: {e}", file=sys.stderr)
