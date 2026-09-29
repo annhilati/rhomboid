@@ -2,7 +2,7 @@ import ast
 import linecache
 import traceback
 
-def execute_rhombus_code(code_blocks: list[str], target_name: str | None) -> list[tuple[str, str]]:
+def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
     import rhombus
     namespace = {
         '__name__': '__main__',
@@ -10,31 +10,35 @@ def execute_rhombus_code(code_blocks: list[str], target_name: str | None) -> lis
         **{name: getattr(rhombus, name) for name in dir(rhombus) if not name.startswith('_')}
     }
     
-    for i, block in enumerate(code_blocks):
-        block_name = f'<Code Block {i+1}>'
-        linecache.cache[block_name] = (len(block), None, [line + '\n' for line in block.splitlines()], block_name)
+    merged_code = "\n".join(code_blocks)
+    tree = ast.parse(merged_code)
+    if not tree.body:
+        raise ValueError("The code blocks are empty.")
         
-        if i == len(code_blocks) - 1 and target_name is None:
-            tree = ast.parse(block)
-            if not tree.body:
-                raise ValueError(f'The code block {i+1} is empty.')
-            
-            last_node = tree.body[-1]
-            if isinstance(last_node, ast.Expr):
-                tree.body.pop()
-                exec(compile(tree, filename=block_name, mode='exec'), namespace)
-                target_value = eval(compile(ast.Expression(last_node.value), filename=block_name, mode='eval'), namespace)
-                target_name = '<unbound expression>'
-                target_var = rhombus.Density(target_value)
-            else:
-                raise ValueError('No compilation target found. Neither did the message contain a \'compile `xyz`\' phrase nor did the code blocks end with an unassigned expression.')
-        else:
-            exec(compile(block, filename=block_name, mode='exec'), namespace)
-
-    if target_name is not None and target_name != '<unbound expression>':
-        if target_name not in namespace:
-            raise ValueError(f'Variable {target_name} is not defined.')
-        target_var = rhombus.Density(namespace[target_name])
+    lines = merged_code.splitlines()
+    
+    last_node = tree.body[-1]
+    if not isinstance(last_node, ast.Expr):
+        raise ValueError("Code must end with an unbound expression that contains the Density to compile.")
+        
+    start_line = last_node.lineno - 1
+    stripped = lines[start_line].lstrip()
+    indent = lines[start_line][:len(lines[start_line]) - len(stripped)]
+    lines[start_line] = indent + "return " + stripped
+        
+    wrapped_source = "@rhombus.macro\ndef rhombus_code():\n"
+    for line in lines:
+        wrapped_source += "    " + line + "\n"
+        
+    block_name = "<Code Blocks>"
+    linecache.cache[block_name] = (len(wrapped_source), None, [line + '\n' for line in wrapped_source.splitlines()], block_name)
+    
+    exec(compile(wrapped_source, filename=block_name, mode='exec'), namespace)
+    
+    user_code_func = namespace['rhombus_code']
+    result = user_code_func()
+    
+    target_var = rhombus.Density(result)
         
     files = target_var.compile()
     

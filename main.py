@@ -9,6 +9,8 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 
+# TODO: Activate human readable names when rhombus==0.1.0-pre4 releases
+
 class RhombusClient(discord.Client):
     def __init__(self):
         super().__init__(
@@ -36,7 +38,7 @@ async def on_ready():
         rhombus_version = importlib.metadata.version("rhombus")
         activity = discord.Activity(type=discord.ActivityType.playing, name=f"Running Rhombus v{rhombus_version}")
         await client.change_presence(activity=activity)
-        print(f"Status set to: Rhombus v{rhombus_version}")
+        print(f"Status set to: Running Rhombus v{rhombus_version}")
     except Exception as e:
         print(f"Could not set Rhombus version in status: {e}")
 

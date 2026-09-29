@@ -30,7 +30,7 @@ def save_cache():
         for k in list(MESSAGE_CACHE.keys())[:-1000]:
             del MESSAGE_CACHE[k]
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(MESSAGE_CACHE, f)
+        json.dump(MESSAGE_CACHE, f, indent=4)
 
 """Here we cache the bot's replies to messages of users (stored in a JSON file), so we can
 allow the Bot correcting itself when the user corrects his message, even after restarts."""
@@ -38,17 +38,20 @@ allow the Bot correcting itself when the user corrects his message, even after r
 
 #======// Discord Interface //===================================================================//
 
-async def process_compile_request(code_text: str, compilation_target_name: str | None, reply_func):
+async def process_compile_request(code_text: str, reply_func):
     """Parse the Discord message and invoke the sandbox."""
     if not (code_blocks := re.findall(r'```(?:python|py)\n(.*?)\n```', code_text, re.IGNORECASE | re.DOTALL)):
         raise ValueError("No Python code blocks (```py or ```python) found.")
 
     # Pass the blocks individually to the compiler for better error logging
-    compiled_files = compile_density(code_blocks, compilation_target_name)
+    compiled_files = await compile_density(code_blocks)
         
     files_to_send: list[discord.File] = []
     for filename, content_str in compiled_files:
         files_to_send.append(discord.File(fp=io.BytesIO(content_str.encode('utf-8')), filename=filename))
+        
+    # Stelle sicher, dass main.json immer als erstes angehängt wird
+    files_to_send.sort(key=lambda f: 0 if f.filename == 'main.json' else 1)
         
     if not files_to_send:
         raise ValueError("The `compile()` method did not return any files.")
@@ -69,11 +72,6 @@ def setup(client: RhombusClient):
 
             target_msg = message
             command_text = message.content
-            
-            cached_target_name = None
-            if is_cached:
-                cached_target_name = MESSAGE_CACHE[str(message.id)].get("target_name")
-            
             if "```py" not in command_text.lower():
                 # Check if it is a reply to another message
                 if message.reference and message.reference.message_id:
@@ -90,34 +88,55 @@ def setup(client: RhombusClient):
                         return
                 else:
                     return
-            
-            match = re.search(r'compile\s+`?([a-zA-Z0-9_]+)`?', command_text, re.IGNORECASE)
-            compilation_target_name = match.group(1) if match else cached_target_name
 
             async def response(text: str, files: list[discord.File]=None):
                 reply_info = MESSAGE_CACHE.get(str(target_msg.id))
+                
                 if reply_info:
-                    try:
-                        existing_reply = await target_msg.channel.fetch_message(reply_info["reply_id"])
-                        await existing_reply.edit(content=text, attachments=files if files else [])
-                        return
-                    except discord.NotFound:
-                        pass
+                    # Migration von altem Cache Format
+                    reply_ids = reply_info.get("reply_ids", [])
+                    if "reply_id" in reply_info:
+                        reply_ids.append(reply_info["reply_id"])
+                        del reply_info["reply_id"]
+                        reply_info["reply_ids"] = reply_ids
+                        
+                    if reply_ids:
+                        first_reply_id = reply_ids[0]
+                        try:
+                            existing_reply = await target_msg.channel.fetch_message(first_reply_id)
+                            await existing_reply.edit(content=text, attachments=files if files else [])
+                            
+                            # Lösche alle weiteren Antworten, um Spam zu verhindern
+                            for r_id in reply_ids[1:]:
+                                try:
+                                    msg_to_delete = await target_msg.channel.fetch_message(r_id)
+                                    await msg_to_delete.delete()
+                                except discord.NotFound:
+                                    pass
+                                    
+                            reply_info["reply_ids"] = [first_reply_id]
+                            save_cache()
+                            return
+                        except discord.NotFound:
+                            # Falls die erste gelöscht wurde, machen wir normal weiter und erstellen eine neue
+                            pass
                 
                 if files:
                     reply = await target_msg.reply(content=text, files=files, mention_author=False, silent=True)
                 else:
                     reply = await target_msg.reply(content=text, mention_author=False, silent=True)
 
-                MESSAGE_CACHE[str(target_msg.id)] = {
-                    "reply_id": reply.id,
-                    "target_name": compilation_target_name
-                }
+                if reply_info:
+                    reply_info["reply_ids"] = [reply.id]
+                else:
+                    MESSAGE_CACHE[str(target_msg.id)] = {
+                        "reply_ids": [reply.id]
+                    }
                 save_cache()
             
             try:
                 async with target_msg.channel.typing():
-                    await process_compile_request(target_msg.content, compilation_target_name, response)
+                    await process_compile_request(target_msg.content, response)
 
             except CompilationSandboxError as e:
                 error_trace = str(e)
@@ -148,16 +167,25 @@ def setup(client: RhombusClient):
             try:
                 # Fetch the sent message to store it in the cache
                 reply = await interaction.original_response()
-                MESSAGE_CACHE[str(message.id)] = {
-                    "reply_id": reply.id,
-                    "target_name": None
-                }
+                
+                reply_info = MESSAGE_CACHE.get(str(message.id))
+                if reply_info:
+                    reply_ids = reply_info.get("reply_ids", [])
+                    if "reply_id" in reply_info:
+                        reply_ids.append(reply_info["reply_id"])
+                        del reply_info["reply_id"]
+                    reply_ids.append(reply.id)
+                    reply_info["reply_ids"] = reply_ids
+                else:
+                    MESSAGE_CACHE[str(message.id)] = {
+                        "reply_ids": [reply.id]
+                    }
                 save_cache()
             except Exception:
                 pass
             
         try:
-            await process_compile_request(message.content, None, response)
+            await process_compile_request(message.content, response)
         except (CompilationSandboxError, ValueError) as e:
             error_trace = str(e)
             if len(error_trace) > 1700:
