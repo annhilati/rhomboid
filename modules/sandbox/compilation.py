@@ -17,6 +17,14 @@ def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
         
     lines = merged_code.splitlines()
     
+    import_lines = []
+    import_line_indices = set()
+    for node in tree.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for i in range(node.lineno - 1, node.end_lineno):
+                import_lines.append(lines[i])
+                import_line_indices.add(i)
+    
     last_node = tree.body[-1]
     if not isinstance(last_node, ast.Expr):
         raise ValueError("Code must end with an unbound expression that contains the Density to compile.")
@@ -26,9 +34,11 @@ def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
     indent = lines[start_line][:len(lines[start_line]) - len(stripped)]
     lines[start_line] = indent + "return " + stripped
         
-    wrapped_source = "@rhombus.macro\ndef rhombus_code():\n"
-    for line in lines:
-        wrapped_source += "    " + line + "\n"
+    wrapped_source = "\n".join(import_lines) + "\n\n"
+    wrapped_source += "@rhombus.macro\ndef rhombus_code():\n"
+    for i, line in enumerate(lines):
+        if i not in import_line_indices:
+            wrapped_source += "    " + line + "\n"
         
     block_name = "<Code Blocks>"
     linecache.cache[block_name] = (len(wrapped_source), None, [line + '\n' for line in wrapped_source.splitlines()], block_name)
