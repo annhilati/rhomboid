@@ -34,13 +34,18 @@ def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
     indent = lines[start_line][:len(lines[start_line]) - len(stripped)]
     lines[start_line] = indent + "return " + stripped
         
-    wrapped_source = "\n".join(import_lines) + "\n\n"
-    wrapped_source += "@rhombus.macro\ndef rhombus_code():\n"
+    block_name = "<Code Blocks>"
+    if import_lines:
+        import_source = "\n".join(import_lines)
+        exec(compile(import_source, filename=block_name, mode='exec'), namespace)
+        
+    wrapped_source = "@rhombus.macro\ndef rhombus_code():\n"
     for i, line in enumerate(lines):
         if i not in import_line_indices:
             wrapped_source += "    " + line + "\n"
+        else:
+            wrapped_source += "\n"
         
-    block_name = "<Code Blocks>"
     linecache.cache[block_name] = (len(wrapped_source), None, [line + '\n' for line in wrapped_source.splitlines()], block_name)
     
     exec(compile(wrapped_source, filename=block_name, mode='exec'), namespace)

@@ -128,9 +128,13 @@ def setup(client: RhombusClient):
 
                 if reply_info:
                     reply_info["reply_ids"] = [reply.id]
+                    reply_info["triggerer_id"] = message.author.id
+                    reply_info["code_author_id"] = target_msg.author.id
                 else:
                     MESSAGE_CACHE[str(target_msg.id)] = {
-                        "reply_ids": [reply.id]
+                        "reply_ids": [reply.id],
+                        "triggerer_id": message.author.id,
+                        "code_author_id": target_msg.author.id
                     }
                 save_cache()
             
@@ -176,9 +180,13 @@ def setup(client: RhombusClient):
                         del reply_info["reply_id"]
                     reply_ids.append(reply.id)
                     reply_info["reply_ids"] = reply_ids
+                    reply_info["triggerer_id"] = interaction.user.id
+                    reply_info["code_author_id"] = message.author.id
                 else:
                     MESSAGE_CACHE[str(message.id)] = {
-                        "reply_ids": [reply.id]
+                        "reply_ids": [reply.id],
+                        "triggerer_id": interaction.user.id,
+                        "code_author_id": message.author.id
                     }
                 save_cache()
             except Exception:
@@ -225,3 +233,21 @@ def setup(client: RhombusClient):
                 import sys, traceback
                 print(f"Fehler beim Fetchen der Raw-Message {payload.message_id}:", file=sys.stderr)
                 traceback.print_exc()
+
+    @client.event
+    async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+        if str(payload.emoji) == "🗑️":
+            for code_msg_id, info in list(MESSAGE_CACHE.items()):
+                if payload.message_id in info.get("reply_ids", []):
+                    allowed_users = {info.get("triggerer_id"), info.get("code_author_id")}
+                    if payload.user_id in allowed_users:
+                        try:
+                            channel = client.get_channel(payload.channel_id) or await client.fetch_channel(payload.channel_id)
+                            msg = await channel.fetch_message(payload.message_id)
+                            await msg.delete()
+                            
+                            info["reply_ids"].remove(payload.message_id)
+                            save_cache()
+                        except Exception:
+                            pass
+                    break

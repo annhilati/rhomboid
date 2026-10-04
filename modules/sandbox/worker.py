@@ -18,6 +18,8 @@ def _persistent_worker_loop(task_queue: multiprocessing.Queue, result_queue: mul
     apply_resource_limits(limits.MAX_RAM_MB, 999999, limits.MAX_FILES_OPEN)
     
     with tempfile.TemporaryDirectory(prefix=filesystem_policy.WORK_DIR_PREFIX) as work_dir:
+        # Weichen matplotlib in unser Sandbox-Verzeichnis um, damit der Font-Cache geschrieben werden darf
+        os.environ['MPLCONFIGDIR'] = work_dir
         setup_audit_hook(work_dir)
         
         while True:

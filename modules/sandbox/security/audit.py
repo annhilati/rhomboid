@@ -4,8 +4,13 @@ import os
 def setup_audit_hook(work_dir: str):
     def audit_hook(event, args):
         # Block dangerous modules/functions (ctypes must be handled OS-side to not break Windows imports)
-        if event in ('os.system', 'os.exec', 'subprocess.Popen', 'socket.connect', 'socket.bind', 'urllib.Request'):
+        if event in ('os.system', 'os.exec', 'socket.connect', 'socket.bind', 'urllib.Request'):
             raise RuntimeError(f'Sandbox security violation: {event} is disabled.')
+            
+        if event == 'subprocess.Popen':
+            exe = str(args[0]) if args[0] else (str(args[1][0]) if len(args) > 1 and args[1] else '')
+            if 'fc-list' not in exe:
+                raise RuntimeError(f'Sandbox security violation: subprocess.Popen is disabled.')
             
         # Block write outside work_dir
         if event == 'open':

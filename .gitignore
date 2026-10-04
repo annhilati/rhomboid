@@ -2,3 +2,4 @@ __pycache__
 .env
 .vscode
 .venv
+message_cache.json
