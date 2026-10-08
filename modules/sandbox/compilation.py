@@ -31,13 +31,15 @@ def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
                 import_line_indices.add(i)
     
     last_node = tree.body[-1]
-    if not isinstance(last_node, ast.Expr):
-        raise ValueError("Code must end with an unbound expression that contains the Density to compile.")
-        
-    start_line = last_node.lineno - 1
-    stripped = lines[start_line].lstrip()
-    indent = lines[start_line][:len(lines[start_line]) - len(stripped)]
-    lines[start_line] = indent + "return " + stripped
+    if isinstance(last_node, ast.Expr):
+        start_line = last_node.lineno - 1
+        stripped = lines[start_line].lstrip()
+        indent = lines[start_line][:len(lines[start_line]) - len(stripped)]
+        lines[start_line] = indent + "return " + stripped
+    elif isinstance(last_node, ast.Return):
+        pass # The user already included the return keyword
+    else:
+        raise ValueError("Code must end with a return statement or an unbound expression that contains a value of type Density.")
         
     block_name = "<Code Blocks>"
     if import_lines:
