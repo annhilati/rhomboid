@@ -4,6 +4,11 @@ import traceback
 
 def execute_rhombus_code(code_blocks: list[str]) -> list[tuple[str, str]]:
     import rhombus
+    
+    # Feature Request: Enable human readable names for generated files/components
+    if hasattr(rhombus.rho, 'human_readable_names'):
+        rhombus.rho.human_readable_names = True
+        
     namespace = {
         '__name__': '__main__',
         'rhombus': rhombus,
